@@ -1,0 +1,160 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>STAR DEFENDER</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#030713;color:white;font-family:Arial,sans-serif;text-align:center;overflow:hidden;touch-action:none}
+header{padding:12px 5px;background:#07152b;border-bottom:2px solid #00e5ff}
+h1{margin:0;color:#00e5ff;font-size:25px;letter-spacing:3px}
+#stats{display:flex;justify-content:space-around;padding:10px;font-weight:bold;color:#fff}
+canvas{display:block;margin:auto;background:#030713;width:100%;max-width:600px;height:calc(100dvh - 205px);min-height:250px;max-height:650px}
+.controls{display:flex;justify-content:center;gap:14px;padding:10px}
+button{background:#09294a;color:#fff;border:2px solid #00e5ff;border-radius:12px;padding:13px 22px;font-size:18px;font-weight:bold;touch-action:none}
+#start{background:#00e5ff;color:#001020}
+#message{position:absolute;left:0;right:0;top:42%;padding:15px;background:#06162bea}
+#message p{line-height:1.5}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header><h1>★ STAR DEFENDER ★</h1></header>
+<div id="stats">
+<span> SCORE: <b id="score">0</b></span>
+<span> LIVES: <b id="lives">3</b></span>
+<span> LEVEL: <b id="level">1</b></span>
+</div>
+<canvas id="game"></canvas>
+<div class="controls">
+<button id="left">◀ LEFT</button>
+<button id="fire">🔥 FIRE</button>
+<button id="right">RIGHT ▶</button>
+</div>
+<div id="message">
+<h2 id="headline">STAR DEFENDER</h2>
+<p>Defend the galaxy! Shoot the incoming enemies.<br>Use the buttons or ← → and SPACE on your keyboard.</p>
+<button id="start">START GAME 🚀</button>
+</div>
+<script>
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);
+let W=600,H=500,player,bullets,enemies,stars,score,lives,level,running=false;
+let keys={},lastShot=0,spawnTimer=0,lastTime=0,raf=0;
+function resize(){
+ const r=canvas.getBoundingClientRect();
+ const d=Math.min(window.devicePixelRatio||1,2);
+ W=600; H=Math.max(300,Math.round(r.height*600/r.width));
+ canvas.width=W*d;canvas.height=H*d;
+ ctx.setTransform(d,0,0,d,0,0);
+}
+function reset(){
+ score=0;lives=3;level=1;bullets=[];enemies=[];
+player={x:W/2,y:H-48,w:32,h:28,speed:300};
+stars=Array.from({length:75},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()*2+0.5}));
+updateStats();running=true;$('message').classList.add('hidden');
+lastTime=performance.now();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+}
+function updateStats(){
+ $('score').textContent=score;$('lives').textContent=lives;$('level').textContent=level;
+}
+function shoot(){
+ const now=performance.now();
+ if(now-lastShot<210||!running)return;
+ lastShot=now;bullets.push({x:player.x,y:player.y-18,speed:480});
+}
+function addEnemy(){
+ const size=22+Math.random()*13;
+ enemies.push({x:size+Math.random()*(W-size*2),y:-size,size,speed:65+level*15+Math.random()*40,phase:Math.random()*6});
+}
+function drawShip(){
+ ctx.save();ctx.translate(player.x,player.y);
+ ctx.fillStyle='#00e5ff';ctx.beginPath();
+ ctx.moveTo(0,-19);ctx.lineTo(17,13);ctx.lineTo(5,8);
+ ctx.lineTo(0,13);ctx.lineTo(-5,8);ctx.lineTo(-17,13);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#fff';ctx.fillRect(-3,-3,6,12);
+ ctx.restore();
+}
+function drawEnemy(e){
+ ctx.save();ctx.translate(e.x,e.y);
+ ctx.fillStyle='#ff3264';ctx.beginPath();
+ for(let i=0;i<10;i++){let a=i*Math.PI/5,r=i%2?e.size*.35:e.size*.55;
+ ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}
+ ctx.closePath();ctx.fill();
+ ctx.fillStyle='#ffb4c7';ctx.fillRect(-4,-3,3,3);ctx.fillRect(3,-3,3,3);
+ ctx.restore();
+}
+function hit(a,b,r){return Math.hypot(a.x-b.x,a.y-b.y)<r;}
+function loop(now){
+ if(!running)return;
+ const dt=Math.min((now-lastTime)/1000,.035);lastTime=now;
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle='#030713';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#b9eaff';
+ for(const s of stars){s.y+=s.s*35*dt;if(s.y>H){s.y=0;s.x=Math.random()*W;}
+ ctx.globalAlpha=.4+s.s/4;ctx.fillRect(s.x,s.y,s.s,s.s);}
+ ctx.globalAlpha=1;
+ let move=0;if(keys.left)move--;if(keys.right)move++;
+ player.x=Math.max(20,Math.min(W-20,player.x+move*player.speed*dt));
+ if(keys.fire||keys.space)shoot();
+ drawShip();
+ for(let i=bullets.length-1;i>=0;i--){
+ const b=bullets[i];b.y-=b.speed*dt;
+ ctx.fillStyle='#7afffb';ctx.fillRect(b.x-2,b.y-10,4,14);
+ if(b.y<0)bullets.splice(i,1);
+ }
+ spawnTimer+=dt;
+ if(spawnTimer>Math.max(.32,1.05-level*.07)){spawnTimer=0;addEnemy();}
+ for(let i=enemies.length-1;i>=0;i--){
+ const e=enemies[i];e.y+=e.speed*dt;e.x+=Math.sin(now/500+e.phase)*25*dt;
+ let destroyed=false;
+ for(let j=bullets.length-1;j>=0;j--){
+ if(hit(e,bullets[j],e.size*.65)){
+ bullets.splice(j,1);enemies.splice(i,1);score+=10;
+ level=1+Math.floor(score/150);updateStats();destroyed=true;break;
+ }}
+ if(destroyed)continue;
+ drawEnemy(e);
+ if(hit(e,player, e.size+14)||e.y>H+e.size){
+ enemies.splice(i,1);lives--;updateStats();
+ if(lives<=0){endGame();return;}
+ }
+ }
+ ctx.fillStyle='#00e5ff';ctx.font='14px Arial';ctx.fillText('GALACTIC DEFENCE',12,22);
+ raf=requestAnimationFrame(loop);
+}
+function endGame(){
+ running=false;$('headline').textContent='GAME OVER!';
+ $('message').querySelector('p').innerHTML='Final score: <b>'+score+'</b><br>Ready for another mission?';
+ $('start').textContent='PLAY AGAIN 🚀';$('message').classList.remove('hidden');
+}
+function bindButton(id,key){
+ const el=$(id);
+ const down=e=>{e.preventDefault();keys[key]=true;if(key==='fire')shoot();};
+ const up=e=>{e.preventDefault();keys[key]=false;};
+ el.addEventListener('pointerdown',down);
+ el.addEventListener('pointerup',up);
+ el.addEventListener('pointerleave',up);
+ el.addEventListener('pointercancel',up);
+}
+bindButton('left','left');bindButton('right','right');bindButton('fire','fire');
+document.addEventListener('keydown',e=>{
+ if(['ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+ if(e.code==='ArrowLeft')keys.left=true;
+ if(e.code==='ArrowRight')keys.right=true;
+ if(e.code==='Space')keys.space=true;
+});
+document.addEventListener('keyup',e=>{
+ if(e.code==='ArrowLeft')keys.left=false;
+ if(e.code==='ArrowRight')keys.right=false;
+ if(e.code==='Space')keys.space=false;
+});
+$('start').addEventListener('click',reset);
+window.addEventListener('resize',()=>{resize();});
+resize();
+</script>
+</body>
+</html>
